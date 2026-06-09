@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tiling the Plane — CalcBridge Day 4</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --teal:   #0D5C73;
+    --teal2:  #1B7A96;
+    --teal3:  #0a3f52;
+    --orange: #D4622A;
+    --gold:   #E8A020;
+    --yellow: #FFD166;
+    --green:  #1a6b4a;
+    --bg:     #F4F7F9;
+    --text:   #1A2A33;
+    --muted:  #5A7080;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--teal3);
+    color: white;
+    min-height: 100vh;
+    padding: 32px 20px 48px;
+  }
+
+  .panel {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* ── HEADER ── */
+  .panel-eyebrow {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 2.5px; text-transform: uppercase;
+    color: var(--yellow); opacity: .75;
+    margin-bottom: 8px;
+  }
+
+  .panel-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(24px, 4vw, 38px);
+    line-height: 1.15; margin-bottom: 10px;
+  }
+
+  .panel-subtitle {
+    font-size: 14px; color: rgba(255,255,255,.55);
+    line-height: 1.65; margin-bottom: 28px;
+    max-width: 640px;
+  }
+
+  /* ── SHAPE SELECTOR ── */
+  .shape-selector {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .shape-btn {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 4px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,.06);
+    border: 2px solid rgba(255,255,255,.12);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .2s;
+    font-family: 'DM Sans', sans-serif;
+    min-width: 72px;
+  }
+
+  .shape-btn:hover {
+    background: rgba(255,255,255,.1);
+    border-color: rgba(255,255,255,.25);
+    transform: translateY(-2px);
+  }
+
+  .shape-btn.active {
+    border-color: var(--yellow);
+    background: rgba(255,209,102,.1);
+  }
+
+  .shape-btn.active.tiles { border-color: var(--yellow); }
+  .shape-btn.active.no-tile { border-color: var(--orange); }
+
+  .shape-btn svg { display: block; }
+
+  .shape-btn-label {
+    font-size: 11px; font-weight: 700;
+    color: rgba(255,255,255,.7);
+    letter-spacing: .5px;
+  }
+
+  .shape-btn.active .shape-btn-label { color: var(--yellow); }
+  .shape-btn.active.no-tile .shape-btn-label { color: var(--orange); }
+
+  /* ── MAIN LAYOUT ── */
+  .main-layout {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 680px) {
+    .main-layout { grid-template-columns: 1fr; }
+  }
+
+  /* ── CANVAS AREA ── */
+  .canvas-wrap {
+    background: rgba(0,0,0,.25);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .canvas-label {
+    display: block;
+    padding: 10px 16px;
+    font-size: 12px; color: rgba(255,255,255,.45);
+    letter-spacing: 1px; text-transform: uppercase;
+    text-align: center;
+    border-top: 1px solid rgba(255,255,255,.07);
+    background: rgba(0,0,0,.2);
+  }
+
+  /* ── VERDICT BADGE ── */
+  .verdict {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    font-size: 14px; font-weight: 700;
+    transition: all .3s;
+  }
+
+  .verdict-icon { font-size: 22px; }
+  .verdict-text { line-height: 1.35; }
+  .verdict-sub  { font-size: 11px; font-weight: 400; opacity: .75; margin-top: 2px; }
+
+  .verdict.tiles {
+    background: rgba(26,107,74,.25);
+    border: 1px solid rgba(26,107,74,.5);
+    color: #5dffa0;
+  }
+
+  .verdict.no-tile {
+    background: rgba(212,98,42,.2);
+    border: 1px solid rgba(212,98,42,.4);
+    color: #ffaa80;
+  }
+
+  /* ── EFFICIENCY METER ── */
+  .efficiency-box {
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .eff-title {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: rgba(255,255,255,.4); margin-bottom: 12px;
+  }
+
+  .eff-current {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32px; color: var(--yellow);
+    line-height: 1; margin-bottom: 4px;
+  }
+
+  .eff-label {
+    font-size: 11px; color: rgba(255,255,255,.4);
+    margin-bottom: 16px;
+  }
+
+  /* comparison bars */
+  .eff-bars { display: flex; flex-direction: column; gap: 8px; }
+
+  .eff-bar-row {
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .eff-bar-name {
+    font-size: 11px; font-weight: 700;
+    color: rgba(255,255,255,.6);
+    min-width: 56px;
+  }
+
+  .eff-bar-track {
+    flex: 1; height: 8px;
+    background: rgba(255,255,255,.08);
+    border-radius: 4px; overflow: hidden;
+  }
+
+  .eff-bar-fill {
+    height: 100%; border-radius: 4px;
+    transition: width .5s ease;
+  }
+
+  .eff-bar-val {
+    font-size: 11px; color: rgba(255,255,255,.5);
+    min-width: 36px; text-align: right;
+  }
+
+  /* ── BEE BANNER ── */
+  .bee-banner {
+    background: rgba(255,209,102,.1);
+    border: 1px solid rgba(255,209,102,.3);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13px; line-height: 1.6;
+    color: var(--yellow);
+    display: none;
+  }
+
+  .bee-banner.show { display: block; }
+
+  .bee-banner strong { color: white; }
+
+  /* ── MATH NOTE ── */
+  .math-note {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 12px;
+    color: rgba(255,255,255,.5);
+    line-height: 1.65;
+    margin-bottom: 16px;
+  }
+
+  .math-note strong { color: rgba(255,255,255,.8); }
+
+  /* ── LEGEND ── */
+  .legend {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .legend-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: rgba(255,255,255,.5);
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px; border-radius: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div class="panel">
+
+  <!-- Header -->
+  <div class="panel-eyebrow">Day 4 · Optimization · Interactive</div>
+  <h2 class="panel-title">Can You Tile a Plane?</h2>
+  <p class="panel-subtitle">
+    Choose a shape. Watch it try to tile the plane with no gaps and no overlaps.
+    Only three regular polygons can do it — and only one is the most efficient.
+    <strong style="color:var(--yellow);">Can you find it before the bees do?</strong>
+  </p>
+
+  <!-- Shape Selector -->
+  <div class="shape-selector" role="group" aria-label="Select a shape to tile">
+
+    <button class="shape-btn no-tile" data-shape="circle" onclick="selectShape('circle')" aria-pressed="false">
+      <svg width="36" height="36" viewBox="0 0 36 36">
+        <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      </svg>
+      <span class="shape-btn-label">Circle</span>
+    </button>
+
+    <button class="shape-btn tiles" data-shape="triangle" onclick="selectShape('triangle')" aria-pressed="false">
+      <svg width="36" height="36" viewBox="0 0 36 36">
+        <polygon points="18,4 32,30 4,30" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      </svg>
+      <span class="shape-btn-label">Triangle</span>
+    </button>
+
+    <button class="shape-btn tiles" data-shape="square" onclick="selectShape('square')" aria-pressed="false">
+      <svg width="36" height="36" viewBox="0 0 36 36">
+        <rect x="5" y="5" width="26" height="26" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      </svg>
+      <span class="shape-btn-label">Square</span>
+    </button>
+
+    <button class="shape-btn no-tile" data-shape="pentagon" onclick="selectShape('pentagon')" aria-pressed="false">
+      <svg width="36" height="36" viewBox="0 0 36 36">
+        <polygon points="18,3 33,14 27,31 9,31 3,14" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      </svg>
+      <span class="shape-btn-label">Pentagon</span>
+    </button>
+
+    <button class="shape-btn tiles active" data-shape="hexagon" onclick="selectShape('hexagon')" aria-pressed="true">
+      <svg width="36" height="36" viewBox="0 0 36 36">
+        <polygon points="18,3 31,10.5 31,25.5 18,33 5,25.5 5,10.5" fill="none" stroke="#FFD166" stroke-width="2"/>
+      </svg>
+      <span class="shape-btn-label">Hexagon</span>
+    </button>
+
+    <button class="shape-btn no-tile" data-shape="octagon" onclick="selectShape('octagon')" aria-pressed="false">
+      <svg width="36" height="36" viewBox="0 0 36 36">
+        <polygon points="12,3 24,3 33,12 33,24 24,33 12,33 3,24 3,12" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2"/>
+      </svg>
+      <span class="shape-btn-label">Octagon</span>
+    </button>
+
+  </div>
+
+  <!-- Main layout: canvas + sidebar -->
+  <div class="main-layout">
+
+    <!-- Canvas -->
+    <div>
+      <div class="canvas-wrap">
+        <canvas id="tilingCanvas" width="580" height="380"></canvas>
+        <!-- legend -->
+        <div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,.07);">
+          <div class="legend">
+            <div class="legend-item">
+              <div class="legend-dot" style="background:rgba(255,209,102,.6);"></div>
+              <span>Shape fill</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background:rgba(220,60,20,.8);"></div>
+              <span>Gap / overlap</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background:rgba(255,255,255,.2);"></div>
+              <span>Edge</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Status bar below canvas -->
+      <div class="canvas-label" id="canvas-label">Select a shape above</div>
+    </div>
+
+    <!-- Sidebar -->
+    <div>
+
+      <!-- Verdict -->
+      <div class="verdict" id="verdict">
+        <div class="verdict-icon" id="verdict-icon">✅</div>
+        <div>
+          <div class="verdict-text" id="verdict-text">Select a shape</div>
+          <div class="verdict-sub" id="verdict-sub"></div>
+        </div>
+      </div>
+
+      <!-- Efficiency meter -->
+      <div class="efficiency-box">
+        <div class="eff-title">Efficiency Score</div>
+        <div class="eff-current" id="eff-current">3.72</div>
+        <div class="eff-label">perimeter ÷ √area &nbsp;·&nbsp; lower = better</div>
+
+        <div class="eff-bars">
+          <div class="eff-bar-row">
+            <div class="eff-bar-name">Hexagon</div>
+            <div class="eff-bar-track">
+              <div class="eff-bar-fill" id="bar-hexagon"
+                   style="width:100%;background:var(--yellow);"></div>
+            </div>
+            <div class="eff-bar-val">3.72</div>
+          </div>
+          <div class="eff-bar-row">
+            <div class="eff-bar-name">Square</div>
+            <div class="eff-bar-track">
+              <div class="eff-bar-fill" id="bar-square"
+                   style="width:88%;background:var(--teal2);"></div>
+            </div>
+            <div class="eff-bar-val">4.00</div>
+          </div>
+          <div class="eff-bar-row">
+            <div class="eff-bar-name">Triangle</div>
+            <div class="eff-bar-track">
+              <div class="eff-bar-fill" id="bar-triangle"
+                   style="width:75%;background:var(--orange);"></div>
+            </div>
+            <div class="eff-bar-val">4.56</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Math note -->
+      <div class="math-note" id="math-note">
+        <strong>Why hexagons win:</strong> The interior angle of a regular hexagon
+        is exactly <strong>120°</strong>. Three hexagons meet at each vertex:
+        3 × 120° = 360°. Perfect fit — no gap, no overlap.
+        No other regular polygon with more sides achieves this.
+      </div>
+
+      <!-- Bee banner -->
+      <div class="bee-banner" id="bee-banner">
+        🐝 <strong>This is what the bees chose.</strong><br>
+        The hexagon is the unique solution to the Honeycomb Conjecture —
+        proven in 1999 after 2,000 years of mathematics.
+        Nature found it first.
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+const canvas = document.getElementById('tilingCanvas');
+const ctx    = canvas.getContext('2d');
+const W = canvas.width;
+const H = canvas.height;
+
+// ── Shape data ──
+const SHAPES = {
+  circle: {
+    tiles: false,
+    label: 'Circle — cannot tile',
+    sub: 'Circles leave curved gaps at every junction. No combination works.',
+    eff: null,
+    mathNote: '<strong>Why circles fail:</strong> Circles have no straight edges and no interior angles. No matter how you arrange them, curved gaps always remain between them.',
+    color: 'rgba(212,98,42,.55)'
+  },
+  triangle: {
+    tiles: true,
+    label: 'Triangle tiles perfectly',
+    sub: 'Interior angle = 60°. Six triangles meet at each vertex: 6 × 60° = 360°.',
+    eff: 4.56,
+    mathNote: '<strong>Triangle efficiency:</strong> Perimeter ÷ √Area = 4.56. Tiles perfectly but uses more perimeter per unit area than the hexagon.',
+    color: 'rgba(212,98,42,.45)'
+  },
+  square: {
+    tiles: true,
+    label: 'Square tiles perfectly',
+    sub: 'Interior angle = 90°. Four squares meet at each vertex: 4 × 90° = 360°.',
+    eff: 4.00,
+    mathNote: '<strong>Square efficiency:</strong> Perimeter ÷ √Area = 4.00. Better than the triangle, but the hexagon still wins.',
+    color: 'rgba(27,122,150,.55)'
+  },
+  pentagon: {
+    tiles: false,
+    label: 'Pentagon — cannot tile',
+    sub: 'Interior angle = 108°. No integer multiple of 108° equals 360°.',
+    eff: null,
+    mathNote: '<strong>Why pentagons fail:</strong> 108° × 3 = 324° (gap). 108° × 4 = 432° (overlap). There is no way to arrange pentagons around a vertex without gaps or overlaps.',
+    color: 'rgba(212,98,42,.55)'
+  },
+  hexagon: {
+    tiles: true,
+    label: 'Hexagon tiles perfectly',
+    sub: 'Interior angle = 120°. Three hexagons meet at each vertex: 3 × 120° = 360°.',
+    eff: 3.72,
+    mathNote: '<strong>Why hexagons win:</strong> Interior angle = 120°. Three hexagons meet at each vertex: 3 × 120° = 360°. Perfect fit — and the lowest perimeter-to-area ratio of any regular polygon that tiles.',
+    color: 'rgba(255,209,102,.45)'
+  },
+  octagon: {
+    tiles: false,
+    label: 'Octagon — cannot tile alone',
+    sub: 'Interior angle = 135°. 2 × 135° = 270° (gap). 3 × 135° = 405° (overlap).',
+    eff: null,
+    mathNote: '<strong>Why octagons fail alone:</strong> Interior angle = 135°. No integer multiple equals 360°. Octagons can tile with squares filling the gaps — but that\'s a mixed tiling, not a regular one.',
+    color: 'rgba(212,98,42,.55)'
+  }
+};
+
+// ── Draw functions ──
+
+function regularPolygon(cx, cy, r, n, rotation) {
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const angle = rotation + (2 * Math.PI * i) / n;
+    pts.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)]);
+  }
+  return pts;
+}
+
+function drawPoly(pts, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+  if (fill)   { ctx.fillStyle = fill;   ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+}
+
+function drawHexagonTile(color) {
+  const s = 38;
+  const w = s * Math.sqrt(3);
+  const h = s * 2;
+  const cols = Math.ceil(W / w) + 2;
+  const rows = Math.ceil(H / (h * 0.75)) + 2;
+
+  for (let row = -1; row < rows; row++) {
+    for (let col = -1; col < cols; col++) {
+      const cx = col * w + (row % 2 === 0 ? 0 : w / 2);
+      const cy = row * h * 0.75;
+      const pts = regularPolygon(cx, cy, s, 6, Math.PI / 6);
+      drawPoly(pts, color, 'rgba(255,255,255,.2)');
+    }
+  }
+}
+
+function drawSquareTile(color) {
+  const s = 44;
+  const cols = Math.ceil(W / s) + 1;
+  const rows = Math.ceil(H / s) + 1;
+  for (let row = -1; row < rows; row++) {
+    for (let col = -1; col < cols; col++) {
+      ctx.fillStyle = color;
+      ctx.strokeStyle = 'rgba(255,255,255,.2)';
+      ctx.lineWidth = 1;
+      ctx.fillRect(col * s, row * s, s, s);
+      ctx.strokeRect(col * s, row * s, s, s);
+    }
+  }
+}
+
+function drawTriangleTile(color) {
+  const s = 52;
+  const h = s * Math.sqrt(3) / 2;
+  const cols = Math.ceil(W / s) + 2;
+  const rows = Math.ceil(H / h) + 2;
+
+  for (let row = -1; row < rows; row++) {
+    for (let col = -1; col < cols * 2; col++) {
+      const flip = (col + row) % 2 !== 0;
+      const x = (col * s) / 2;
+      const y = row * h;
+      let pts;
+      if (!flip) {
+        pts = [[x, y + h], [x + s/2, y], [x + s, y + h]];
+      } else {
+        pts = [[x, y], [x + s/2, y + h], [x + s, y]];
+      }
+      drawPoly(pts, color, 'rgba(255,255,255,.2)');
+    }
+  }
+}
+
+function drawCircleTile(color) {
+  const r = 28;
+  const cols = Math.ceil(W / (r * 2)) + 2;
+  const rows = Math.ceil(H / (r * 2)) + 2;
+
+  // First draw gap color
+  ctx.fillStyle = 'rgba(212,98,42,.3)';
+  ctx.fillRect(0, 0, W, H);
+
+  for (let row = -1; row < rows; row++) {
+    for (let col = -1; col < cols; col++) {
+      const cx = col * r * 2 + r + (row % 2 === 0 ? 0 : r);
+      const cy = row * r * 2 + r;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r - 1, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.2)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+}
+
+function drawPentagonTile(color) {
+  // One large, clean diagram: 3 pentagons meeting at a central vertex
+  // Drawn precisely with no overlaps — one clear example of the 36° gap
+
+  ctx.fillStyle = '#1a0800';
+  ctx.fillRect(0, 0, W, H);
+
+  const r = 85;  // large enough to be very clear
+  const cx = W / 2;
+  const cy = H / 2 + 10;
+
+  // Pentagon interior angle = 108°
+  // Place 3 pentagons so one vertex of each meets at (cx, cy)
+  // Pentagon k: the vertex pointing toward center is at angle startAngle + k*108°
+  // Pentagon center = (cx,cy) + r in direction (startAngle + k*108° + 180°)
+
+  const deg = Math.PI / 180;
+
+  for (let k = 0; k < 3; k++) {
+    // Angle from center to this pentagon's center
+    const dirAngle = (-90 + k * 108) * deg;
+    const pcx = cx + r * Math.cos(dirAngle);
+    const pcy = cy + r * Math.sin(dirAngle);
+
+    // Rotation: vertex 0 of pentagon points back toward (cx,cy)
+    // vertex at angle (dirAngle + 180°) from pentagon center
+    // For regularPolygon, vertex i is at rot + 2πi/5
+    // We want vertex 0 at dirAngle + π
+    const rot = dirAngle + Math.PI - (0 * 2 * Math.PI / 5);
+
+    const pts = regularPolygon(pcx, pcy, r, 5, rot);
+    drawPoly(pts, color, 'rgba(255,255,255,.4)');
+
+    // Label each pentagon
+    ctx.fillStyle = 'rgba(255,255,255,.5)';
+    ctx.font = 'bold 12px DM Sans, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('108°', pcx, pcy);
+  }
+
+  // Draw the 36° gap wedge
+  // The 3 pentagons span: k=0 at -90°, k=1 at 18°, k=2 at 126°
+  // The gap is between k=2's right edge and k=0's left edge
+  // k=2 ends at 126° + 108° = 234° (from center perspective that's 234° - 90° = 144°... )
+  // Simpler: wedge goes from (126° + 108°) back to (-90°) going clockwise = 36°
+  // In radians from center:
+  const gapStart = (-90 + 3 * 108) * deg;  // = 234°
+  const gapEnd   = (-90) * deg;             // = -90° = 270° going the short way
+
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, r * 0.75, gapStart, gapEnd);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(220, 55, 15, 0.92)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 140, 80, 1)';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // 36° label inside wedge
+  const midGap = gapStart + (36 / 2) * deg;
+  const lx = cx + r * 0.40 * Math.cos(midGap);
+  const ly = cy + r * 0.40 * Math.sin(midGap);
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 13px DM Sans, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('36°', lx, ly - 6);
+  ctx.font = '11px DM Sans, sans-serif';
+  ctx.fillText('GAP', lx, ly + 7);
+
+  // Dot at shared vertex
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,140,80,1)';
+  ctx.fill();
+
+  // Angle arc labels at the shared vertex for each pentagon
+  for (let k = 0; k < 3; k++) {
+    const arcStart = (-90 + k * 108 + 180 - 54) * deg;
+    const arcEnd   = (-90 + k * 108 + 180 + 54) * deg;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 28, arcStart, arcEnd);
+    ctx.strokeStyle = 'rgba(255,255,255,.3)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Label
+    const midA = (arcStart + arcEnd) / 2;
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.font = '10px DM Sans, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('108°', cx + 42 * Math.cos(midA), cy + 42 * Math.sin(midA));
+  }
+
+  // Top annotation
+  ctx.fillStyle = 'rgba(255,255,255,.55)';
+  ctx.font = '12px DM Sans, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('3 × 108° = 324°  —  a 36° wedge gap always remains', W / 2, 10);
+
+  // Bottom note
+  ctx.fillStyle = 'rgba(255,255,255,.3)';
+  ctx.font = '11px DM Sans, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('No integer multiple of 108° equals 360°', W / 2, H - 8);
+}
+
+function drawOctagonTile(color) {
+  // Octagons leave square gaps — show this with large clear squares
+  // Use bigger spacing so gaps are visually obvious
+  const octR = 32;  // octagon circumradius
+  const gap  = 18;  // square gap side length
+  const step = octR * Math.cos(Math.PI/8) * 2 + gap;  // center-to-center distance
+
+  ctx.fillStyle = '#071e28';
+  ctx.fillRect(0, 0, W, H);
+
+  const cols = Math.ceil(W / step) + 2;
+  const rows = Math.ceil(H / step) + 2;
+
+  // First pass — draw bright gap squares
+  for (let row = -1; row < rows; row++) {
+    for (let col = -1; col < cols; col++) {
+      const cx = col * step + step / 2;
+      const cy = row * step + step / 2;
+      // Gap square sits at bottom-right corner of each octagon center grid
+      const gx = cx + step/2 - gap/2;
+      const gy = cy + step/2 - gap/2;
+      if (gx < W + gap && gy < H + gap) {
+        ctx.fillStyle = 'rgba(220,60,20,.85)';
+        ctx.fillRect(gx - gap/2, gy - gap/2, gap, gap);
+        ctx.strokeStyle = 'rgba(255,120,80,.9)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(gx - gap/2, gy - gap/2, gap, gap);
+        // Label inside gap square
+        if (gap > 12) {
+          ctx.fillStyle = 'white';
+          ctx.font = 'bold 8px DM Sans, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('■', gx, gy);
+        }
+      }
+    }
+  }
+
+  // Second pass — draw octagons on top
+  for (let row = -1; row < rows; row++) {
+    for (let col = -1; col < cols; col++) {
+      const cx = col * step + step / 2;
+      const cy = row * step + step / 2;
+      const pts = regularPolygon(cx, cy, octR, 8, Math.PI / 8);
+      drawPoly(pts, color, 'rgba(255,255,255,.25)');
+    }
+  }
+
+  // Annotation
+  ctx.fillStyle = 'rgba(255,255,255,.45)';
+  ctx.font = '11px DM Sans, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Octagons leave square gaps — a second shape is required to fill them', 10, 8);
+
+  // Highlight one gap with arrow and label
+  const labelX = step * 1.5;
+  const labelY = step * 1.5;
+  ctx.fillStyle = 'rgba(255,120,80,.95)';
+  ctx.font = 'bold 11px DM Sans, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (labelX < W && labelY < H) {
+    ctx.fillText('← SQUARE GAP', labelX + step * 0.8, labelY);
+  }
+}
+
+// ── Render ──
+function render(shape) {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#071e28';
+  ctx.fillRect(0, 0, W, H);
+
+  const data = SHAPES[shape];
+
+  switch(shape) {
+    case 'hexagon':  drawHexagonTile(data.color);  break;
+    case 'square':   drawSquareTile(data.color);   break;
+    case 'triangle': drawTriangleTile(data.color); break;
+    case 'circle':   drawCircleTile(data.color);   break;
+    case 'pentagon': drawPentagonTile(data.color); break;
+    case 'octagon':  drawOctagonTile(data.color);  break;
+  }
+}
+
+// ── Update UI ──
+function selectShape(shape) {
+  const data = SHAPES[shape];
+
+  // Buttons
+  document.querySelectorAll('.shape-btn').forEach(btn => {
+    btn.classList.remove('active');
+    btn.setAttribute('aria-pressed', 'false');
+  });
+  const activeBtn = document.querySelector(`[data-shape="${shape}"]`);
+  activeBtn.classList.add('active');
+  activeBtn.setAttribute('aria-pressed', 'true');
+
+  // Verdict
+  const verdict = document.getElementById('verdict');
+  verdict.className = 'verdict ' + (data.tiles ? 'tiles' : 'no-tile');
+  document.getElementById('verdict-icon').textContent = data.tiles ? '✅' : '❌';
+  document.getElementById('verdict-text').textContent = data.label;
+  document.getElementById('verdict-sub').textContent  = data.sub;
+
+  // Efficiency
+  const effCurrent = document.getElementById('eff-current');
+  if (data.eff) {
+    effCurrent.textContent = data.eff.toFixed(2);
+    effCurrent.style.color = shape === 'hexagon' ? 'var(--yellow)' :
+                             shape === 'square'   ? 'var(--teal2)'  : 'var(--orange)';
+  } else {
+    effCurrent.textContent = 'N/A';
+    effCurrent.style.color = 'rgba(255,255,255,.3)';
+  }
+
+  // Highlight active bar
+  ['hexagon','square','triangle'].forEach(s => {
+    const bar = document.getElementById('bar-' + s);
+    bar.style.opacity = s === shape ? '1' : '0.4';
+  });
+
+  // Efficiency bar widths — relative to best (hexagon = 100%)
+  // Bars inverted: lower ratio = wider bar (more efficient)
+  // hexagon 3.72 → 100%, square 4.00 → 93%, triangle 4.56 → 82%
+  const widths = { hexagon: '100%', square: '93%', triangle: '82%' };
+  ['hexagon','square','triangle'].forEach(s => {
+    document.getElementById('bar-' + s).style.width = widths[s] || '0%';
+  });
+
+  // Math note
+  document.getElementById('math-note').innerHTML = data.mathNote;
+
+  // Bee banner
+  const bee = document.getElementById('bee-banner');
+  bee.classList.toggle('show', shape === 'hexagon');
+
+  // Canvas label
+  document.getElementById('canvas-label').textContent =
+    data.tiles ? '✓ Tiles with no gaps or overlaps' : '✗ Cannot tile — gaps or overlaps appear';
+
+  // Render canvas
+  render(shape);
+}
+
+// Init
+selectShape('hexagon');
+</script>
+</body>
+</html>
